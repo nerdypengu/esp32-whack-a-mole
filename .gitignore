@@ -1,0 +1,25 @@
+# ESP-IDF Build output
+build/
+sdkconfig.old
+sdkconfig.ci
+managed_components/
+dependencies.lock
+
+# Drivers & downloaded zips
+CP210x_Driver.zip
+cp210x_driver/
+
+# IDE / Editor configuration
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# OS generated files
+.DS_Store
+Thumbs.db
+*.tmp
+*.log
