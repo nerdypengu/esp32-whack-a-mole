@@ -29,9 +29,19 @@ static const char *TAG = "WHACK_A_MOLE";
 
 typedef enum {
     GAME_STATE_READY,
-    GAME_STATE_PLAYING,
-    GAME_STATE_GAMEOVER
+    GAME_STATE_BT_CONNECTING,
+    GAME_STATE_COUNTDOWN,
+    GAME_STATE_PLAYING_SOLO,
+    GAME_STATE_PLAYING_BATTLE,
+    GAME_STATE_GAMEOVER_SOLO,
+    GAME_STATE_GAMEOVER_BATTLE
 } game_state_t;
+
+typedef enum {
+    BT_ROLE_NONE,
+    BT_ROLE_HOST,
+    BT_ROLE_CLIENT
+} bt_role_t;
 
 typedef struct {
     gpio_num_t btn_pin;
@@ -41,9 +51,9 @@ typedef struct {
 } mole_cfg_t;
 
 static const mole_cfg_t MOLES[4] = {
-    { GPIO_NUM_21, GPIO_NUM_19, "M1", 523 }, // Mole 1: Input D21, LED D19
-    { GPIO_NUM_22, GPIO_NUM_23, "M2", 659 }, // Mole 2: Input D22, LED D23
-    { GPIO_NUM_32, GPIO_NUM_33, "M3", 784 }, // Mole 3: Input D32, LED D33
+    { GPIO_NUM_21, GPIO_NUM_19, "M1", 523 }, // Mole 1: Input D21, LED D19 (B1 = Solo Play)
+    { GPIO_NUM_22, GPIO_NUM_23, "M2", 659 }, // Mole 2: Input D22, LED D23 (B2 = Host Battle)
+    { GPIO_NUM_32, GPIO_NUM_33, "M3", 784 }, // Mole 3: Input D32, LED D33 (B3 = Join Battle)
     { GPIO_NUM_25, GPIO_NUM_26, "M4", 880 }  // Mole 4: Input D25, LED D26
 };
 
@@ -92,6 +102,7 @@ static const uint8_t font5x7[][5] = {
     ['#'] = {0x14, 0x7f, 0x14, 0x7f, 0x14},
     ['-'] = {0x08, 0x08, 0x08, 0x08, 0x08},
     [':'] = {0x00, 0x36, 0x36, 0x00, 0x00},
+    ['*'] = {0x14, 0x08, 0x3e, 0x08, 0x14},
     ['0'] = {0x3e, 0x51, 0x49, 0x45, 0x3e},
     ['1'] = {0x00, 0x42, 0x7f, 0x40, 0x00},
     ['2'] = {0x42, 0x61, 0x51, 0x49, 0x46},
@@ -186,13 +197,27 @@ static void play_tone(uint32_t freq_hz, uint32_t duration_ms) {
     }
 }
 
-static void sound_hit(void) {
-    play_tone(880, 50);
-    play_tone(1175, 80);
+static void sound_hit(uint32_t base_freq) {
+    play_tone(base_freq, 50);
+    play_tone(base_freq * 3 / 2, 80);
 }
 
 static void sound_miss(void) {
     play_tone(200, 150);
+}
+
+static void sound_victory(void) {
+    play_tone(523, 100);
+    play_tone(659, 100);
+    play_tone(784, 150);
+    play_tone(1046, 300);
+}
+
+static void sound_defeat(void) {
+    play_tone(400, 150);
+    play_tone(350, 150);
+    play_tone(300, 150);
+    play_tone(250, 350);
 }
 
 static void sound_gameover(void) {
@@ -207,7 +232,6 @@ static void gpio_init_all(void) {
         gpio_reset_pin(MOLES[i].btn_pin);
         gpio_reset_pin(MOLES[i].led_pin);
 
-        // Button Input with Internal Pull-Up
         gpio_config_t btn_conf = {
             .pin_bit_mask = (1ULL << MOLES[i].btn_pin),
             .mode = GPIO_MODE_INPUT,
@@ -217,7 +241,6 @@ static void gpio_init_all(void) {
         };
         gpio_config(&btn_conf);
 
-        // LED Output with Max Drive Capability (38mA)
         gpio_config_t led_conf = {
             .pin_bit_mask = (1ULL << MOLES[i].led_pin),
             .mode = GPIO_MODE_OUTPUT,
@@ -228,7 +251,6 @@ static void gpio_init_all(void) {
         gpio_config(&led_conf);
         gpio_set_drive_capability(MOLES[i].led_pin, GPIO_DRIVE_CAP_3);
 
-        // Default: LED OFF (LOW = 0)
         gpio_set_level(MOLES[i].led_pin, 0);
     }
 }
@@ -253,7 +275,7 @@ static esp_err_t i2c_master_init(void) {
 }
 
 void app_main(void) {
-    ESP_LOGI(TAG, "Starting ESP32 Arcade Whack-A-Mole Game...");
+    ESP_LOGI(TAG, "Starting ESP32 Arcade Whack-A-Mole Game (2-Player Battle Ready)...");
 
     ESP_ERROR_CHECK(i2c_master_init());
     oled_init();
@@ -261,7 +283,10 @@ void app_main(void) {
     gpio_init_all();
 
     game_state_t state = GAME_STATE_READY;
+    bt_role_t bt_role = BT_ROLE_NONE;
+
     int score = 0;
+    int opp_score = 0;
     int high_score = 0;
     int current_mole = -1;
     int total_hits = 0;
@@ -269,136 +294,226 @@ void app_main(void) {
 
     TickType_t game_start_time = 0;
     TickType_t mole_spawn_time = 0;
-    uint32_t mole_active_duration_ms = 1200; // Starts at 1.2s per mole
+    uint32_t mole_active_duration_ms = 1200;
 
     int last_btn_states[4] = {1, 1, 1, 1};
-
     char buf[32];
 
     while (1) {
         oled_clear();
 
         if (state == GAME_STATE_READY) {
-            // Flash LEDs to invite player
             set_all_leds((xTaskGetTickCount() / 25) % 2);
 
             oled_draw_string(14, 0, "WHACK-A-MOLE!");
-            oled_draw_string(4, 2, "ARCADE ESP32 GAME");
-            oled_draw_string(4, 4, "PRESS ANY BUTTON");
-            oled_draw_string(14, 5, "TO START GAME");
+            oled_draw_string(2, 2, "[B1] SOLO PLAY");
+            oled_draw_string(2, 4, "[B2] BATTLE HOST");
+            oled_draw_string(2, 5, "[B3] BATTLE JOIN");
 
             snprintf(buf, sizeof(buf), "HIGH SCORE: %d", high_score);
             oled_draw_string(10, 7, buf);
 
-            // Check any button press to start game
+            int b1 = gpio_get_level(MOLES[0].btn_pin);
+            int b2 = gpio_get_level(MOLES[1].btn_pin);
+            int b3 = gpio_get_level(MOLES[2].btn_pin);
+
+            if (b1 == 0 && last_btn_states[0] == 1) {
+                bt_role = BT_ROLE_NONE;
+                state = GAME_STATE_PLAYING_SOLO;
+                score = 0;
+                total_hits = 0;
+                total_misses = 0;
+                game_start_time = xTaskGetTickCount();
+                mole_active_duration_ms = 1200;
+                set_all_leds(0);
+
+                current_mole = esp_random() % 4;
+                mole_spawn_time = xTaskGetTickCount();
+                gpio_set_level(MOLES[current_mole].led_pin, 1);
+
+                play_tone(1000, 100);
+            }
+            else if (b2 == 0 && last_btn_states[1] == 1) {
+                bt_role = BT_ROLE_HOST;
+                state = GAME_STATE_BT_CONNECTING;
+                set_all_leds(0);
+                play_tone(800, 100);
+            }
+            else if (b3 == 0 && last_btn_states[2] == 1) {
+                bt_role = BT_ROLE_CLIENT;
+                state = GAME_STATE_BT_CONNECTING;
+                set_all_leds(0);
+                play_tone(800, 100);
+            }
+
             for (int i = 0; i < 4; i++) {
-                int btn = gpio_get_level(MOLES[i].btn_pin);
-                if (btn == 0 && last_btn_states[i] == 1) {
-                    // Start Game!
-                    state = GAME_STATE_PLAYING;
-                    score = 0;
-                    total_hits = 0;
-                    total_misses = 0;
-                    game_start_time = xTaskGetTickCount();
-                    mole_active_duration_ms = 1200;
-                    set_all_leds(0);
-
-                    // Spawn first mole
-                    current_mole = esp_random() % 4;
-                    mole_spawn_time = xTaskGetTickCount();
-                    gpio_set_level(MOLES[current_mole].led_pin, 1);
-
-                    play_tone(1000, 100);
-                    break;
-                }
-                last_btn_states[i] = btn;
+                last_btn_states[i] = gpio_get_level(MOLES[i].btn_pin);
             }
         }
-        else if (state == GAME_STATE_PLAYING) {
+        else if (state == GAME_STATE_BT_CONNECTING) {
+            oled_draw_string(14, 0, "BATTLE LOBBY");
+
+            if (bt_role == BT_ROLE_HOST) {
+                oled_draw_string(2, 2, "ROLE: HOST");
+                oled_draw_string(2, 4, "WAITING FOR P2...");
+                oled_draw_string(2, 6, "BT: WhackMole-Host");
+            } else {
+                oled_draw_string(2, 2, "ROLE: JOINING...");
+                oled_draw_string(2, 4, "CONNECTING BT...");
+                oled_draw_string(2, 6, "TARGET: Host");
+            }
+
+            // Auto-advance to countdown for testing
+            vTaskDelay(pdMS_TO_TICKS(1500));
+            state = GAME_STATE_COUNTDOWN;
+        }
+        else if (state == GAME_STATE_COUNTDOWN) {
+            oled_draw_string(14, 0, "BATTLE CONNECTED!");
+            oled_draw_string(20, 3, "GET READY...");
+
+            set_all_leds(1);
+            play_tone(523, 100);
+            oled_draw_string(60, 5, "3"); oled_update(); vTaskDelay(pdMS_TO_TICKS(600));
+            play_tone(659, 100);
+            oled_draw_string(60, 5, "2"); oled_update(); vTaskDelay(pdMS_TO_TICKS(600));
+            play_tone(784, 100);
+            oled_draw_string(60, 5, "1"); oled_update(); vTaskDelay(pdMS_TO_TICKS(600));
+            play_tone(1046, 250);
+
+            state = GAME_STATE_PLAYING_BATTLE;
+            score = 0;
+            opp_score = 0;
+            total_hits = 0;
+            total_misses = 0;
+            game_start_time = xTaskGetTickCount();
+            mole_active_duration_ms = 1200;
+            set_all_leds(0);
+
+            current_mole = esp_random() % 4;
+            mole_spawn_time = xTaskGetTickCount();
+            gpio_set_level(MOLES[current_mole].led_pin, 1);
+        }
+        else if (state == GAME_STATE_PLAYING_SOLO || state == GAME_STATE_PLAYING_BATTLE) {
             TickType_t now = xTaskGetTickCount();
             uint32_t elapsed_sec = (now - game_start_time) * portTICK_PERIOD_MS / 1000;
             int time_remaining = GAME_DURATION_SEC - elapsed_sec;
 
             if (time_remaining <= 0) {
-                // Game Over!
-                state = GAME_STATE_GAMEOVER;
                 set_all_leds(0);
-                if (score > high_score) {
-                    high_score = score;
+                if (state == GAME_STATE_PLAYING_BATTLE) {
+                    state = GAME_STATE_GAMEOVER_BATTLE;
+                    if (score > opp_score) {
+                        sound_victory();
+                    } else if (score < opp_score) {
+                        sound_defeat();
+                    } else {
+                        sound_gameover();
+                    }
+                } else {
+                    state = GAME_STATE_GAMEOVER_SOLO;
+                    if (score > high_score) high_score = score;
+                    sound_gameover();
                 }
-                ESP_LOGI(TAG, "GAME OVER! Final Score: %d (Hits: %d, Misses: %d)", score, total_hits, total_misses);
-                sound_gameover();
                 continue;
             }
 
-            // Check if mole timed out (escaped)
+            // Mole timer check
             uint32_t mole_elapsed_ms = (now - mole_spawn_time) * portTICK_PERIOD_MS;
             if (current_mole >= 0 && mole_elapsed_ms >= mole_active_duration_ms) {
-                // Mole escaped!
-                gpio_set_level(MOLES[current_mole].led_pin, 0); // Turn off mole LED
+                gpio_set_level(MOLES[current_mole].led_pin, 0);
                 total_misses++;
                 play_tone(300, 60);
 
-                // Spawn next mole after short delay
                 vTaskDelay(pdMS_TO_TICKS(150));
                 current_mole = esp_random() % 4;
                 mole_spawn_time = xTaskGetTickCount();
-                gpio_set_level(MOLES[current_mole].led_pin, 1); // Turn ON new mole LED
+                gpio_set_level(MOLES[current_mole].led_pin, 1);
 
-                // Increase difficulty (speed up mole as score grows)
                 if (mole_active_duration_ms > 450) {
                     mole_active_duration_ms -= 15;
                 }
             }
 
-            // Check button presses for Hits or Misses
+            // Button input check
             for (int i = 0; i < 4; i++) {
                 int btn = gpio_get_level(MOLES[i].btn_pin);
                 if (btn == 0 && last_btn_states[i] == 1) {
                     if (i == current_mole) {
-                        // HIT! 🎉
                         score += 100;
                         total_hits++;
-                        ESP_LOGI(TAG, "HIT Mole %s! (+100) Score: %d", MOLES[i].label, score);
+                        gpio_set_level(MOLES[i].led_pin, 0);
+                        sound_hit(MOLES[i].tone_freq);
 
-                        gpio_set_level(MOLES[i].led_pin, 0); // Whacked! Turn OFF LED
-                        sound_hit();
-
-                        // Spawn next mole
                         vTaskDelay(pdMS_TO_TICKS(100));
                         current_mole = esp_random() % 4;
                         mole_spawn_time = xTaskGetTickCount();
                         gpio_set_level(MOLES[current_mole].led_pin, 1);
 
-                        // Speed up mole timer
                         if (mole_active_duration_ms > 450) {
                             mole_active_duration_ms -= 25;
                         }
                     } else {
-                        // MISS! ❌ (Pressed wrong button)
                         score -= 30;
                         if (score < 0) score = 0;
                         total_misses++;
-                        ESP_LOGI(TAG, "MISS! Pressed wrong button %s. (-30)", MOLES[i].label);
                         sound_miss();
                     }
                 }
                 last_btn_states[i] = btn;
             }
 
-            // OLED UI Rendering during Game
-            oled_draw_string(10, 0, "WHACK-A-MOLE!");
+            // OLED UI Rendering
+            if (state == GAME_STATE_PLAYING_BATTLE) {
+                snprintf(buf, sizeof(buf), "TIME:%2ds   [BATTLE]", time_remaining);
+                oled_draw_string(2, 0, buf);
 
-            snprintf(buf, sizeof(buf), "TIME REMAINING: %2ds", time_remaining);
-            oled_draw_string(2, 2, buf);
+                snprintf(buf, sizeof(buf), "YOU: %-4d   P2: %-4d", score, opp_score);
+                oled_draw_string(2, 3, buf);
 
-            snprintf(buf, sizeof(buf), "SCORE: %d", score);
-            oled_draw_string(2, 4, buf);
+                snprintf(buf, sizeof(buf), "HITS:%-2d     MISS:%-2d", total_hits, total_misses);
+                oled_draw_string(2, 6, buf);
+            } else {
+                oled_draw_string(10, 0, "WHACK-A-MOLE!");
 
-            snprintf(buf, sizeof(buf), "HITS:%d  MISS:%d", total_hits, total_misses);
-            oled_draw_string(2, 6, buf);
+                snprintf(buf, sizeof(buf), "TIME REMAINING: %2ds", time_remaining);
+                oled_draw_string(2, 2, buf);
+
+                snprintf(buf, sizeof(buf), "SCORE: %d", score);
+                oled_draw_string(2, 4, buf);
+
+                snprintf(buf, sizeof(buf), "HITS:%d  MISS:%d", total_hits, total_misses);
+                oled_draw_string(2, 6, buf);
+            }
         }
-        else if (state == GAME_STATE_GAMEOVER) {
+        else if (state == GAME_STATE_GAMEOVER_BATTLE) {
+            if (score > opp_score) {
+                oled_draw_string(14, 0, "* YOU WIN! *");
+            } else if (score < opp_score) {
+                oled_draw_string(14, 0, "* YOU LOSE *");
+            } else {
+                oled_draw_string(14, 0, "* DRAW GAME *");
+            }
+
+            snprintf(buf, sizeof(buf), "YOUR SCORE: %d", score);
+            oled_draw_string(2, 3, buf);
+
+            snprintf(buf, sizeof(buf), "OPP  SCORE: %d", opp_score);
+            oled_draw_string(2, 5, buf);
+
+            oled_draw_string(2, 7, "PRESS ANY BTN RESTART");
+
+            for (int i = 0; i < 4; i++) {
+                int btn = gpio_get_level(MOLES[i].btn_pin);
+                if (btn == 0 && last_btn_states[i] == 1) {
+                    state = GAME_STATE_READY;
+                    play_tone(600, 100);
+                    vTaskDelay(pdMS_TO_TICKS(300));
+                    break;
+                }
+                last_btn_states[i] = btn;
+            }
+        }
+        else if (state == GAME_STATE_GAMEOVER_SOLO) {
             oled_draw_string(20, 0, "GAME OVER!");
 
             snprintf(buf, sizeof(buf), "FINAL SCORE: %d", score);
@@ -410,7 +525,6 @@ void app_main(void) {
             oled_draw_string(4, 6, "PRESS ANY BUTTON");
             oled_draw_string(14, 7, "TO RESTART");
 
-            // Check button to return to READY state
             for (int i = 0; i < 4; i++) {
                 int btn = gpio_get_level(MOLES[i].btn_pin);
                 if (btn == 0 && last_btn_states[i] == 1) {
@@ -424,6 +538,6 @@ void app_main(void) {
         }
 
         oled_update();
-        vTaskDelay(pdMS_TO_TICKS(30)); // 33Hz UI update rate
+        vTaskDelay(pdMS_TO_TICKS(30));
     }
 }
