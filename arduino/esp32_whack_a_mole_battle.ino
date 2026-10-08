@@ -104,58 +104,66 @@ static void oled_clear(void) {
   memset(oled_buffer, 0x00, sizeof(oled_buffer));
 }
 
-// 5x7 ASCII Font Bitmap
-static const uint8_t font5x7[][5] = {
-  [' '] = {0x00, 0x00, 0x00, 0x00, 0x00},
-  ['!'] = {0x00, 0x00, 0x5f, 0x00, 0x00},
-  ['#'] = {0x14, 0x7f, 0x14, 0x7f, 0x14},
-  ['-'] = {0x08, 0x08, 0x08, 0x08, 0x08},
-  [':'] = {0x00, 0x36, 0x36, 0x00, 0x00},
-  ['0'] = {0x3e, 0x51, 0x49, 0x45, 0x3e},
-  ['1'] = {0x00, 0x42, 0x7f, 0x40, 0x00},
-  ['2'] = {0x42, 0x61, 0x51, 0x49, 0x46},
-  ['3'] = {0x21, 0x41, 0x45, 0x4b, 0x31},
-  ['4'] = {0x18, 0x14, 0x12, 0x7f, 0x10},
-  ['5'] = {0x27, 0x45, 0x45, 0x45, 0x39},
-  ['6'] = {0x3c, 0x4a, 0x49, 0x49, 0x30},
-  ['7'] = {0x01, 0x71, 0x09, 0x05, 0x03},
-  ['8'] = {0x36, 0x49, 0x49, 0x49, 0x36},
-  ['9'] = {0x06, 0x49, 0x49, 0x29, 0x1e},
-  ['A'] = {0x7c, 0x12, 0x11, 0x12, 0x7c},
-  ['B'] = {0x7f, 0x49, 0x49, 0x49, 0x36},
-  ['C'] = {0x3e, 0x41, 0x41, 0x41, 0x22},
-  ['D'] = {0x7f, 0x41, 0x41, 0x22, 0x1c},
-  ['E'] = {0x7f, 0x49, 0x49, 0x49, 0x41},
-  ['F'] = {0x7f, 0x09, 0x09, 0x09, 0x01},
-  ['G'] = {0x3e, 0x41, 0x49, 0x49, 0x7a},
-  ['H'] = {0x7f, 0x08, 0x08, 0x08, 0x7f},
-  ['I'] = {0x00, 0x41, 0x7f, 0x41, 0x00},
-  ['J'] = {0x20, 0x40, 0x41, 0x3f, 0x01},
-  ['K'] = {0x7f, 0x08, 0x14, 0x22, 0x41},
-  ['L'] = {0x7f, 0x40, 0x40, 0x40, 0x40},
-  ['M'] = {0x7f, 0x02, 0x0c, 0x02, 0x7f},
-  ['N'] = {0x7f, 0x04, 0x08, 0x10, 0x7f},
-  ['O'] = {0x3e, 0x41, 0x41, 0x41, 0x3e},
-  ['P'] = {0x7f, 0x09, 0x09, 0x09, 0x06},
-  ['Q'] = {0x3e, 0x41, 0x51, 0x21, 0x5e},
-  ['R'] = {0x7f, 0x09, 0x19, 0x29, 0x46},
-  ['S'] = {0x46, 0x49, 0x49, 0x49, 0x31},
-  ['T'] = {0x01, 0x01, 0x7f, 0x01, 0x01},
-  ['U'] = {0x3f, 0x40, 0x40, 0x40, 0x3f},
-  ['V'] = {0x1f, 0x20, 0x40, 0x20, 0x1f},
-  ['W'] = {0x3f, 0x40, 0x38, 0x40, 0x3f},
-  ['X'] = {0x63, 0x14, 0x08, 0x14, 0x63},
-  ['Y'] = {0x07, 0x08, 0x70, 0x08, 0x07},
-  ['Z'] = {0x61, 0x51, 0x49, 0x45, 0x43},
-  ['['] = {0x00, 0x7f, 0x41, 0x41, 0x00},
-  [']'] = {0x00, 0x41, 0x41, 0x7f, 0x00}
-};
+static void get_font_5x7(char c, uint8_t out[5]) {
+  if (c >= 'a' && c <= 'z') {
+    c -= 32; // Convert lowercase to uppercase
+  }
+  switch (c) {
+    case ' ': out[0]=0x00; out[1]=0x00; out[2]=0x00; out[3]=0x00; out[4]=0x00; break;
+    case '!': out[0]=0x00; out[1]=0x00; out[2]=0x5f; out[3]=0x00; out[4]=0x00; break;
+    case '#': out[0]=0x14; out[1]=0x7f; out[2]=0x14; out[3]=0x7f; out[4]=0x14; break;
+    case '*': out[0]=0x14; out[1]=0x08; out[2]=0x3e; out[3]=0x08; out[4]=0x14; break;
+    case '-': out[0]=0x08; out[1]=0x08; out[2]=0x08; out[3]=0x08; out[4]=0x08; break;
+    case ':': out[0]=0x00; out[1]=0x36; out[2]=0x36; out[3]=0x00; out[4]=0x00; break;
+    case '0': out[0]=0x3e; out[1]=0x51; out[2]=0x49; out[3]=0x45; out[4]=0x3e; break;
+    case '1': out[0]=0x00; out[1]=0x42; out[2]=0x7f; out[3]=0x40; out[4]=0x00; break;
+    case '2': out[0]=0x42; out[1]=0x61; out[2]=0x51; out[3]=0x49; out[4]=0x46; break;
+    case '3': out[0]=0x21; out[1]=0x41; out[2]=0x45; out[3]=0x4b; out[4]=0x31; break;
+    case '4': out[0]=0x18; out[1]=0x14; out[2]=0x12; out[3]=0x7f; out[4]=0x10; break;
+    case '5': out[0]=0x27; out[1]=0x45; out[2]=0x45; out[3]=0x45; out[4]=0x39; break;
+    case '6': out[0]=0x3c; out[1]=0x4a; out[2]=0x49; out[3]=0x49; out[4]=0x30; break;
+    case '7': out[0]=0x01; out[1]=0x71; out[2]=0x09; out[3]=0x05; out[4]=0x03; break;
+    case '8': out[0]=0x36; out[1]=0x49; out[2]=0x49; out[3]=0x49; out[4]=0x36; break;
+    case '9': out[0]=0x06; out[1]=0x49; out[2]=0x49; out[3]=0x29; out[4]=0x1e; break;
+    case 'A': out[0]=0x7c; out[1]=0x12; out[2]=0x11; out[3]=0x12; out[4]=0x7c; break;
+    case 'B': out[0]=0x7f; out[1]=0x49; out[2]=0x49; out[3]=0x49; out[4]=0x36; break;
+    case 'C': out[0]=0x3e; out[1]=0x41; out[2]=0x41; out[3]=0x41; out[4]=0x22; break;
+    case 'D': out[0]=0x7f; out[1]=0x41; out[2]=0x41; out[3]=0x22; out[4]=0x1c; break;
+    case 'E': out[0]=0x7f; out[1]=0x49; out[2]=0x49; out[3]=0x49; out[4]=0x41; break;
+    case 'F': out[0]=0x7f; out[1]=0x09; out[2]=0x09; out[3]=0x09; out[4]=0x01; break;
+    case 'G': out[0]=0x3e; out[1]=0x41; out[2]=0x49; out[3]=0x49; out[4]=0x7a; break;
+    case 'H': out[0]=0x7f; out[1]=0x08; out[2]=0x08; out[3]=0x08; out[4]=0x7f; break;
+    case 'I': out[0]=0x00; out[1]=0x41; out[2]=0x7f; out[3]=0x41; out[4]=0x00; break;
+    case 'J': out[0]=0x20; out[1]=0x40; out[2]=0x41; out[3]=0x3f; out[4]=0x01; break;
+    case 'K': out[0]=0x7f; out[1]=0x08; out[2]=0x14; out[3]=0x22; out[4]=0x41; break;
+    case 'L': out[0]=0x7f; out[1]=0x40; out[2]=0x40; out[3]=0x40; out[4]=0x40; break;
+    case 'M': out[0]=0x7f; out[1]=0x02; out[2]=0x0c; out[3]=0x02; out[4]=0x7f; break;
+    case 'N': out[0]=0x7f; out[1]=0x04; out[2]=0x08; out[3]=0x10; out[4]=0x7f; break;
+    case 'O': out[0]=0x3e; out[1]=0x41; out[2]=0x41; out[3]=0x41; out[4]=0x3e; break;
+    case 'P': out[0]=0x7f; out[1]=0x09; out[2]=0x09; out[3]=0x09; out[4]=0x06; break;
+    case 'Q': out[0]=0x3e; out[1]=0x41; out[2]=0x51; out[3]=0x21; out[4]=0x5e; break;
+    case 'R': out[0]=0x7f; out[1]=0x09; out[2]=0x19; out[3]=0x29; out[4]=0x46; break;
+    case 'S': out[0]=0x46; out[1]=0x49; out[2]=0x49; out[3]=0x49; out[4]=0x31; break;
+    case 'T': out[0]=0x01; out[1]=0x01; out[2]=0x7f; out[3]=0x01; out[4]=0x01; break;
+    case 'U': out[0]=0x3f; out[1]=0x40; out[2]=0x40; out[3]=0x40; out[4]=0x3f; break;
+    case 'V': out[0]=0x1f; out[1]=0x20; out[2]=0x40; out[3]=0x20; out[4]=0x1f; break;
+    case 'W': out[0]=0x3f; out[1]=0x40; out[2]=0x38; out[3]=0x40; out[4]=0x3f; break;
+    case 'X': out[0]=0x63; out[1]=0x14; out[2]=0x08; out[3]=0x14; out[4]=0x63; break;
+    case 'Y': out[0]=0x07; out[1]=0x08; out[2]=0x70; out[3]=0x08; out[4]=0x07; break;
+    case 'Z': out[0]=0x61; out[1]=0x51; out[2]=0x49; out[3]=0x45; out[4]=0x43; break;
+    case '[': out[0]=0x00; out[1]=0x7f; out[2]=0x41; out[3]=0x41; out[4]=0x00; break;
+    case ']': out[0]=0x00; out[1]=0x41; out[2]=0x41; out[3]=0x7f; out[4]=0x00; break;
+    default: memset(out, 0, 5); break;
+  }
+}
 
 static void oled_draw_char(int x, int page, char c) {
   if (c < 32 || c > 126) return;
   if (x > 122 || page > 7) return;
+  uint8_t f[5];
+  get_font_5x7(c, f);
   for (int i = 0; i < 5; i++) {
-    oled_buffer[page * 128 + x + i] = font5x7[(uint8_t)c][i];
+    oled_buffer[page * 128 + x + i] = f[i];
   }
   oled_buffer[page * 128 + x + 5] = 0x00;
 }
@@ -255,9 +263,11 @@ static uint32_t mole_active_duration_ms = 1200;
 static int last_btn_states[4] = {1, 1, 1, 1};
 static char buf[32];
 static String bt_rx_buffer = "";
+static bool bt_verified = false;
+static unsigned long last_identify_send_time = 0;
 
 // ---------------------------------------------------------------------------
-// Bluetooth Messaging Helper Functions
+// Bluetooth Messaging Helper Functions & Handshake
 // ---------------------------------------------------------------------------
 
 static void send_bt_msg(const String &msg) {
@@ -273,7 +283,18 @@ static void process_bt_incoming(void) {
       if (bt_rx_buffer.length() > 0) {
         bt_rx_buffer.trim();
         
-        if (bt_rx_buffer.startsWith("SCORE:")) {
+        if (bt_rx_buffer == "IDENTIFY_REQ:ESP32_WHACK_A_MOLE_V1") {
+          // Received handshake request from Client ESP32 system
+          bt_verified = true;
+          send_bt_msg("IDENTIFY_ACK:ESP32_WHACK_A_MOLE_V1");
+          Serial.println("[BT] Handshake Verified! Remote device confirmed as ESP32 Whack-A-Mole system.");
+        }
+        else if (bt_rx_buffer == "IDENTIFY_ACK:ESP32_WHACK_A_MOLE_V1") {
+          // Received handshake acknowledgment from Host ESP32 system
+          bt_verified = true;
+          Serial.println("[BT] Handshake Ack Received! Host confirmed as ESP32 Whack-A-Mole system.");
+        }
+        else if (bt_rx_buffer.startsWith("SCORE:")) {
           opp_score = bt_rx_buffer.substring(6).toInt();
         } 
         else if (bt_rx_buffer == "START_GAME") {
@@ -350,6 +371,7 @@ void loop() {
     else if (b2 == 0 && last_btn_states[1] == 1) {
       // BATTLE MODE - HOST
       bt_role = BT_ROLE_HOST;
+      bt_verified = false;
       SerialBT.begin("WhackMole-Host"); // Bluetooth device name
       state = GAME_STATE_BT_CONNECTING;
       set_all_leds(0);
@@ -358,6 +380,7 @@ void loop() {
     else if (b3 == 0 && last_btn_states[2] == 1) {
       // BATTLE MODE - JOIN CLIENT
       bt_role = BT_ROLE_CLIENT;
+      bt_verified = false;
       SerialBT.begin("WhackMole-Client", true); // Master mode to connect
       state = GAME_STATE_BT_CONNECTING;
       set_all_leds(0);
@@ -372,26 +395,70 @@ void loop() {
     }
   }
   else if (state == GAME_STATE_BT_CONNECTING) {
-    oled_draw_string(14, 0, "BATTLE LOBBY");
+    oled_draw_string(10, 0, "* BATTLE LOBBY *");
+
+    // Animated dots for searching
+    int dot_count = (millis() / 400) % 4;
+    char dots[5] = "";
+    for (int d = 0; d < dot_count; d++) dots[d] = '.';
 
     if (bt_role == BT_ROLE_HOST) {
-      oled_draw_string(2, 2, "ROLE: HOST");
-      oled_draw_string(2, 4, "WAITING FOR P2...");
-      oled_draw_string(2, 6, "BT: WhackMole-Host");
+      oled_draw_string(2, 2, "ROLE: HOST (P1)");
+      oled_draw_string(2, 3, "NAME: WhackMole-Host");
 
-      if (SerialBT.hasClient()) {
+      if (bt_verified) {
+        oled_draw_string(2, 5, "STATUS: ESP32 VERIFIED!");
+        oled_draw_string(2, 7, "STARTING GAME...");
         send_bt_msg("START_GAME");
+        play_tone(1046, 150);
+        delay(800);
         state = GAME_STATE_COUNTDOWN;
+      }
+      else if (SerialBT.hasClient()) {
+        oled_draw_string(2, 5, "STATUS: PAIRED!");
+        snprintf(buf, sizeof(buf), "VERIFYING%s", dots);
+        oled_draw_string(2, 6, buf);
+      }
+      else {
+        snprintf(buf, sizeof(buf), "STATUS: SEARCHING%s", dots);
+        oled_draw_string(2, 5, buf);
+        oled_draw_string(2, 7, "[B4] CANCEL");
       }
     } else {
-      oled_draw_string(2, 2, "ROLE: JOINING...");
-      oled_draw_string(2, 4, "CONNECTING BT...");
-      oled_draw_string(2, 6, "TARGET: Host");
+      oled_draw_string(2, 2, "ROLE: CLIENT (P2)");
+      oled_draw_string(2, 3, "TARGET: WhackMole-Host");
 
-      if (SerialBT.connected()) {
-        send_bt_msg("START_GAME");
-        state = GAME_STATE_COUNTDOWN;
+      if (bt_verified) {
+        oled_draw_string(2, 5, "STATUS: ESP32 VERIFIED!");
+        oled_draw_string(2, 7, "WAITING FOR START...");
       }
+      else if (SerialBT.connected()) {
+        oled_draw_string(2, 5, "STATUS: CONNECTED!");
+        snprintf(buf, sizeof(buf), "VERIFYING%s", dots);
+        oled_draw_string(2, 6, buf);
+
+        // Periodically send identification handshake request to Host
+        if (millis() - last_identify_send_time > 400) {
+          send_bt_msg("IDENTIFY_REQ:ESP32_WHACK_A_MOLE_V1");
+          last_identify_send_time = millis();
+        }
+      }
+      else {
+        snprintf(buf, sizeof(buf), "STATUS: SCANNING%s", dots);
+        oled_draw_string(2, 5, buf);
+        oled_draw_string(2, 7, "[B4] CANCEL");
+      }
+    }
+
+    // Allow cancelling back to main menu with Button 4 (GPIO 25)
+    int b4 = digitalRead(MOLES[3].btn_pin);
+    if (b4 == 0 && last_btn_states[3] == 1) {
+      SerialBT.end();
+      state = GAME_STATE_READY;
+      play_tone(400, 100);
+    }
+    for (int i = 0; i < 4; i++) {
+      last_btn_states[i] = digitalRead(MOLES[i].btn_pin);
     }
   }
   else if (state == GAME_STATE_COUNTDOWN) {
