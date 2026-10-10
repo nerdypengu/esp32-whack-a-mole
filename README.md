@@ -29,17 +29,29 @@ An arcade-style Whack-A-Mole game built for **ESP32** supporting both **ESP-IDF 
 - **1x SSD1306 I2C OLED Display (128x64)**
 - **1x Passive Buzzer or Speaker**
 
-### 📍 Wiring Diagram
+### 📍 Wiring Diagrams
 
+#### 1. Standard 30-Pin / 28-Pin Board Mapping
 | Component | ESP32 Pin | Function | Notes |
 | :--- | :--- | :--- | :--- |
 | **OLED Display** | `GPIO 4` (`D4`) | I2C SDA | 128x64 OLED (Address `0x3C`) |
 | **OLED Display** | `GPIO 5` (`D5`) | I2C SCL | Internal pull-up enabled |
-| **Speaker / Buzzer** | `GPIO 17` (`TX2`) | PWM Tone Output | LEDC channel (`GPIO 17` stays silent idle) |
+| **Speaker / Buzzer** | `GPIO 17` (`TX2`) | PWM Tone Output | LEDC channel (`GPIO 17` silent idle) |
 | **Mole 1 (B1)** | Input: `GPIO 21` (`D21`)<br>LED: `GPIO 19` (`D19`) | Button & LED | **Solo Start** (Internal Pull-Up) |
 | **Mole 2 (B2)** | Input: `GPIO 22` (`D22`)<br>LED: `GPIO 23` (`D23`) | Button & LED | **Host Battle** (Internal Pull-Up) |
 | **Mole 3 (B3)** | Input: `GPIO 32` (`D32`)<br>LED: `GPIO 33` (`D33`) | Button & LED | **Join Battle** (Internal Pull-Up) |
 | **Mole 4 (B4)** | Input: `GPIO 25` (`D25`)<br>LED: `GPIO 26` (`D26`) | Button & LED | **Mole 4** (Internal Pull-Up) |
+
+#### 2. ESP-WROOM-32 38-Pin Module Mapping
+| Component | 38-Pin Board Location | ESP32 Pin | Function | Notes |
+| :--- | :--- | :--- | :--- | :--- |
+| **OLED Display** | Right Side - Pin 26 | `GPIO 4` (`D4`) | I2C SDA | 128x64 OLED |
+| **OLED Display** | Right Side - Pin 29 | `GPIO 5` (`D5`) | I2C SCL | I2C Clock |
+| **Speaker / Buzzer** | Right Side - Pin 28 | `GPIO 17` (`D17`) | PWM Tone | Audio output |
+| **Mole 1 (B1)** | Input: Right Pin 33<br>LED: Right Pin 31 | Input: `GPIO 21`<br>LED: `GPIO 19` | Button & LED | **Solo Start** |
+| **Mole 2 (B2)** | Input: Right Pin 30<br>LED: Right Pin 37 | Input: `GPIO 18`<br>LED: `GPIO 23` | Button & LED | **Host Battle** |
+| **Mole 3 (B3)** | Input: Left Pin 11<br>LED: Left Pin 12 | Input: `GPIO 27`<br>LED: `GPIO 14` | Button & LED | **Join Battle** |
+| **Mole 4 (B4)** | Input: Left Pin 15<br>LED: Left Pin 13 | Input: `GPIO 13`<br>LED: `GPIO 12` | Button & LED | **Mole 4** |
 
 > ℹ️ **Note on 4-Pin Illuminated Buttons**: Connect diagonally across opposite corners! 
 > - **Input Pin + GND** on one diagonal pair.
@@ -65,9 +77,11 @@ An arcade-style Whack-A-Mole game built for **ESP32** supporting both **ESP-IDF 
 ## 🛠️ How to Build & Flash
 
 ### Option A: Arduino IDE
-1. Open [`arduino/esp32_whack_a_mole.ino`](file:///f:/test-esp/arduino/esp32_whack_a_mole.ino) in Arduino IDE.
-2. Select Board: **ESP32 Dev Module**.
-3. Upload to your ESP32!
+- **For 30-Pin / 28-Pin Board**: Open [`arduino/esp32_whack_a_mole/esp32_whack_a_mole.ino`](file:///f:/test-esp/arduino/esp32_whack_a_mole/esp32_whack_a_mole.ino).
+- **For 38-Pin Board**: Open [`arduino/esp32_whack_a_mole_38pin/esp32_whack_a_mole_38pin.ino`](file:///f:/test-esp/arduino/esp32_whack_a_mole_38pin/esp32_whack_a_mole_38pin.ino).
+- **For 2-Player Bluetooth Battle**: Open [`arduino/esp32_whack_a_mole_battle.ino`](file:///f:/test-esp/arduino/esp32_whack_a_mole_battle.ino).
+
+Select Board: **ESP32 Dev Module** and click **Upload**!
 
 ### Option B: ESP-IDF 5.x
 1. **Build Firmware**:
@@ -87,14 +101,18 @@ An arcade-style Whack-A-Mole game built for **ESP32** supporting both **ESP-IDF 
 ```
 .
 ├── arduino/
-│   └── esp32_whack_a_mole.ino # Arduino C++ version (Bluetooth Battle supported)
+│   ├── esp32_whack_a_mole/       # 30-Pin / 28-Pin Arduino Sketch
+│   │   └── esp32_whack_a_mole.ino
+│   ├── esp32_whack_a_mole_38pin/ # Dedicated 38-Pin Module Sketch
+│   │   └── esp32_whack_a_mole_38pin.ino
+│   └── esp32_whack_a_mole_battle.ino # 2-Player Bluetooth Battle Sketch
 ├── main/
-│   ├── main.c                 # ESP-IDF C version (Bluetooth Battle supported)
-│   └── CMakeLists.txt         # Component build rules
-├── CMakeLists.txt             # Main project CMake config
-├── esp32_gpio_guide.md        # Detailed hardware & wiring reference
-├── build.bat                  # ESP-IDF compile script
-├── flash_monitor.bat          # Flash & launch serial monitor script
-├── clear_screen.bat           # Erase OLED display script
+│   ├── main.c                    # ESP-IDF C version (Bluetooth Battle supported)
+│   └── CMakeLists.txt            # Component build rules
+├── CMakeLists.txt                # Main project CMake config
+├── esp32_gpio_guide.md           # Detailed hardware & wiring reference
+├── build.bat                     # ESP-IDF compile script
+├── flash_monitor.bat             # Flash & launch serial monitor script
+├── clear_screen.bat              # Erase OLED display script
 └── README.md
 ```

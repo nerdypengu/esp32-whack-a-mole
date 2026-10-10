@@ -54,10 +54,10 @@ typedef struct {
 } mole_cfg_t;
 
 static const mole_cfg_t MOLES[4] = {
-  { 21, 19, "M1", 523 }, // Mole 1: Input D21, LED D19 (B1 = Solo / General Start)
-  { 22, 23, "M2", 659 }, // Mole 2: Input D22, LED D23 (B2 = Host Battle)
-  { 32, 33, "M3", 784 }, // Mole 3: Input D32, LED D33 (B3 = Join Battle)
-  { 25, 26, "M4", 880 }  // Mole 4: Input D25, LED D26
+  { 21, 19, "M1", 523 }, // Mole 1: Btn Pin 33 (D21), LED Pin 31 (D19)
+  { 18, 23, "M2", 659 }, // Mole 2: Btn Pin 30 (D18), LED Pin 37 (D23)
+  { 27, 14, "M3", 784 }, // Mole 3: Btn Pin 11 (D27), LED Pin 12 (D14)
+  { 13, 12, "M4", 880 }  // Mole 4: Btn Pin 15 (D13), LED Pin 13 (D12)
 };
 
 static uint8_t oled_buffer[1024];

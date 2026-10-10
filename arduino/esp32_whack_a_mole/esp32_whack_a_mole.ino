@@ -1,46 +1,42 @@
 /*
- * ESP32 Arcade Whack-A-Mole — Arduino IDE port
+ * ESP32 Arcade Whack-A-Mole — Arduino IDE Port
  *
- * Converted from the ESP-IDF C implementation in main/main.c. Game logic,
- * pinout, scoring, difficulty curve, and OLED/font rendering are unchanged;
- * only the platform-facing calls were swapped for Arduino-ESP32 equivalents.
+ * PHYSICAL 38-PIN BOARD WIRING DIAGRAM (Matches ESP32 38-Pin DevKit):
  *
- * Target: Arduino-ESP32 core 3.x (board "ESP32 Dev Module"), which tracks
- * ESP-IDF 5.x — the same IDF major version this project's main/ target uses.
- * No external libraries required; Wire is bundled with the core, and the
- * SSD1306 driver + 5x7 font are hand-rolled (same as the original).
- *
- * API mapping (ESP-IDF -> Arduino):
- *   i2c_master_write_to_device()      -> Wire.beginTransmission/write/endTransmission
- *   gpio_config() / gpio_set_level()  -> pinMode() / digitalWrite() / digitalRead()
- *   ledc_*_config() + ledc_set_duty() -> ledcAttach() / ledcWriteTone() / ledcWrite()
- *   esp_random()                      -> randomSeed(esp_random()) once, then random()
- *   xTaskGetTickCount()/portTICK_*    -> millis() (already in ms, no tick conversion)
- *   vTaskDelay(pdMS_TO_TICKS(x))      -> delay(x)
- *   app_main() { ...init...; while(1) { ... } }  -> setup() { ...init... } + loop() { ... }
- *
- * Porting note (I2C buffer size): the original wrote a full 128-byte OLED
- * page plus a 1-byte control prefix (129 bytes) directly via
- * i2c_master_write_to_device(), which has no fixed buffer limit. Arduino's
- * Wire library uses a fixed internal buffer (128 bytes by default on
- * Arduino-ESP32), which is 1 byte too small for a 129-byte transfer.
- * Wire.setBufferSize(132) below raises that limit before Wire.begin(). If
- * you're on an older core without setBufferSize(), split oled_send_data()
- * into two Wire transmissions (e.g. 64+64 bytes) instead.
+ *                  LEFT SIDE                       RIGHT SIDE
+ *         (3.3V) Pin  1 [ 3V3 ]              [ GND  ] Pin 38 (GND)
+ *                Pin  2 [ EN  ]              [ D23  ] Pin 37 ---> Mole 2 LED
+ *                Pin  3 [ D36 ]              [ D22  ] Pin 36 ---> Mole 2 Button
+ *                Pin  4 [ D39 ]              [ TX0  ] Pin 35
+ *                Pin  5 [ D34 ]              [ RX0  ] Pin 34
+ *                Pin  6 [ D35 ]              [ D21  ] Pin 33 ---> Mole 1 Button
+ *                Pin  7 [ D32 ]              [ GND  ] Pin 32
+ *                Pin  8 [ D33 ]              [ D19  ] Pin 31 ---> Mole 1 LED
+ *                Pin  9 [ D25 ]              [ D18  ] Pin 30
+ *                Pin 10 [ D26 ]              [ D5   ] Pin 29 ---> OLED SCL
+ * Mole 3 Button <--- Pin 11 [ D27 ]          [ D17  ] Pin 28 ---> Speaker / Buzzer
+ *   Mole 3 LED <--- Pin 12 [ D14 ]          [ D16  ] Pin 27
+ *   Mole 4 LED <--- Pin 13 [ D12 ]          [ D4   ] Pin 26 ---> OLED SDA
+ *          (GND) Pin 14 [ GND ]              [ D0   ] Pin 25
+ * Mole 4 Button <--- Pin 15 [ D13 ]          [ D2   ] Pin 24
+ *      [FLASH]   Pin 16 [ D9  ]              [ D15  ] Pin 23
+ *      [FLASH]   Pin 17 [ D10 ]              [ D8   ] Pin 22 [FLASH]
+ *      [FLASH]   Pin 18 [ D11 ]              [ D7   ] Pin 21 [FLASH]
+ *          (5V)  Pin 19 [ Vin ]              [ D6   ] Pin 20 [FLASH]
  */
 
 #include <Wire.h>
-#include "esp_random.h" // for esp_random(), used only to seed randomSeed() in setup()
+#include "esp_random.h"
 
-// ---- OLED Pin Configuration (SDA=D4, SCL=D5) ----
-#define I2C_MASTER_SDA_IO    4
-#define I2C_MASTER_SCL_IO    5
+// ---- OLED Pin Configuration (SDA=Pin 26 / D4, SCL=Pin 29 / D5) ----
+#define I2C_MASTER_SDA_IO    4   // Pin 26 (Right side)
+#define I2C_MASTER_SCL_IO    5   // Pin 29 (Right side)
 #define I2C_MASTER_FREQ_HZ   400000
 #define OLED_I2C_ADDRESS     0x3C
 
-// ---- Speaker / Buzzer Pin Configuration on TX2 (GPIO 17) ----
-#define SPEAKER_PIN          17
-#define LEDC_RESOLUTION_BITS 10   // matches original LEDC_TIMER_10_BIT (1024 duty levels)
+// ---- Speaker / Buzzer Pin Configuration (Pin 28 / D17) ----
+#define SPEAKER_PIN          17  // Pin 28 (Right side)
+#define LEDC_RESOLUTION_BITS 10
 
 #define GAME_DURATION_SEC    30
 
@@ -58,10 +54,10 @@ typedef struct {
 } mole_cfg_t;
 
 static const mole_cfg_t MOLES[4] = {
-  { 21, 19, "M1", 523 }, // Mole 1: Input D21, LED D19
-  { 22, 23, "M2", 659 }, // Mole 2: Input D22, LED D23
-  { 32, 33, "M3", 784 }, // Mole 3: Input D32, LED D33
-  { 25, 26, "M4", 880 }  // Mole 4: Input D25, LED D26
+  { 21, 19, "M1", 523 }, // Mole 1: Btn Pin 33 (D21), LED Pin 31 (D19)
+  { 18, 23, "M2", 659 }, // Mole 2: Btn Pin 30 (D18), LED Pin 37 (D23)
+  { 27, 14, "M3", 784 }, // Mole 3: Btn Pin 11 (D27), LED Pin 12 (D14)
+  { 13, 12, "M4", 880 }  // Mole 4: Btn Pin 15 (D13), LED Pin 13 (D12)
 };
 
 static uint8_t oled_buffer[1024];
